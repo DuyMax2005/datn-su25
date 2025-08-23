@@ -2,26 +2,46 @@
 import CashierLayout from '@/layouts/CashierLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { ref, onMounted, watch, computed } from 'vue';
-import { ChevronDown, ChevronUp, Plus, Search, Calendar } from 'lucide-vue-next';
+import { ChevronDown, ChevronUp, Plus, Search, Calendar, ChevronLeft, ChevronRight } from 'lucide-vue-next';
 import axios from 'axios';
-
 import { debounce } from 'lodash';
 
+// State variables for data and UI
 const allReturnBills = ref([]);
 const expandedReturnBill = ref(null);
 const errorMessage = ref('');
+
+// State variables for search, filter, and pagination
 const searchQuery = ref('');
 const filterDate = ref('');
+const currentPage = ref(1);
+const lastPage = ref(1);
+const total = ref(0);
+const from = ref(0);
+const to = ref(0);
+const prev_page_url = ref(null);
+const next_page_url = ref(null);
 
-const fetchAllReturnBills = async () => {
+const fetchAllReturnBills = async (page = 1) => {
     try {
         const response = await axios.get(route('cashier.returns.all'), {
             params: {
                 query: searchQuery.value,
                 date: filterDate.value,
+                page: page,
             },
         });
-        allReturnBills.value = response.data;
+        
+        // Update data and pagination info from the response
+        allReturnBills.value = response.data.data;
+        currentPage.value = response.data.current_page;
+        lastPage.value = response.data.last_page;
+        total.value = response.data.total;
+        from.value = response.data.from;
+        to.value = response.data.to;
+        prev_page_url.value = response.data.prev_page_url;
+        next_page_url.value = response.data.next_page_url;
+        
         errorMessage.value = '';
     } catch (error) {
         if (error.response && error.response.data && error.response.data.error) {
@@ -33,7 +53,10 @@ const fetchAllReturnBills = async () => {
     }
 };
 
-const debouncedFetch = debounce(fetchAllReturnBills, 300);
+const debouncedFetch = debounce(() => {
+    currentPage.value = 1; // Reset to first page on new search/filter
+    fetchAllReturnBills();
+}, 300);
 
 const toggleDetails = (returnBill) => {
     if (expandedReturnBill.value && expandedReturnBill.value.id === returnBill.id) {
@@ -43,16 +66,22 @@ const toggleDetails = (returnBill) => {
     }
 };
 
+const changePage = (pageNumber) => {
+    if (pageNumber >= 1 && pageNumber <= lastPage.value) {
+        fetchAllReturnBills(pageNumber);
+    }
+};
+
 onMounted(() => {
     fetchAllReturnBills();
 });
 
-watch(searchQuery, (newQuery) => {
+watch(searchQuery, () => {
     debouncedFetch();
 });
 
-watch(filterDate, (newDate) => {
-    fetchAllReturnBills();
+watch(filterDate, () => {
+    debouncedFetch();
 });
 
 const formatCurrency = (value) => {
@@ -95,6 +124,7 @@ const groupedReturnDetails = computed(() => {
     return Object.values(groups);
 });
 </script>
+
 <template>
     <Head title="Danh sách đơn trả hàng" />
     <CashierLayout>
@@ -117,8 +147,8 @@ const groupedReturnDetails = computed(() => {
                             v-model="filterDate"
                             type="date"
                             class="w-full p-3 pl-4 pr-12 bg-gray-50 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200"
-                        />
-                        <Calendar class="absolute right-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
+                            />
+                            <Calendar class="absolute right-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
                     </div>
                 </div>
                 <Link :href="route('cashier.returns.index')" class="px-4 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors flex items-center">
@@ -192,6 +222,28 @@ const groupedReturnDetails = computed(() => {
                             </tr>
                         </tbody>
                     </table>
+                </div>
+
+                <div v-if="total > 0" class="flex flex-col sm:flex-row justify-between items-center gap-4 mt-6">
+                    <p class="text-sm text-gray-600">
+                        Hiển thị <span class="font-semibold">{{ from }}</span> đến <span class="font-semibold">{{ to }}</span> của <span class="font-semibold">{{ total }}</span> hóa đơn
+                    </p>
+                    <div class="flex items-center gap-2">
+                        <button
+                            @click="changePage(currentPage - 1)"
+                            :disabled="!prev_page_url"
+                            class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <ChevronLeft class="w-4 h-4" />
+                        </button>
+                        <button
+                            @click="changePage(currentPage + 1)"
+                            :disabled="!next_page_url"
+                            class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <ChevronRight class="w-4 h-4" />
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

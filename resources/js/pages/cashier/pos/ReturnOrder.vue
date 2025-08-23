@@ -1,6 +1,6 @@
 <script setup>
 import CashierLayout from '@/layouts/CashierLayout.vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3'; // Không cần import 'router as Inertia' nữa
 import { ref, watch, computed } from 'vue';
 import { Search, ChevronDown, ChevronUp, ArrowLeft } from 'lucide-vue-next';
 import axios from 'axios';
@@ -10,8 +10,8 @@ const searchQuery = ref('');
 const bill = ref(null);
 const loading = ref(false);
 const error = ref('');
-const selectedItems = ref({});
 const successMessage = ref('');
+const selectedItems = ref({});
 
 const searchBill = async () => {
     if (!searchQuery.value) {
@@ -31,7 +31,6 @@ const searchBill = async () => {
         bill.value = response.data;
         if (bill.value) {
             selectedItems.value = {};
-            // Khởi tạo selectedItems dựa trên product_id
             bill.value.details.forEach(detail => {
                 if (!selectedItems.value[detail.product_id]) {
                     selectedItems.value[detail.product_id] = {
@@ -65,14 +64,12 @@ const returnForm = useForm({
     reason: ''
 });
 
-const returnBill = async () => {
+const returnBill = () => {
     if (!bill.value) {
         error.value = 'Không có hóa đơn để xử lý.';
-        successMessage.value = '';
         return;
     }
 
-    // Lọc ra các sản phẩm đã chọn và gửi tổng số lượng trả
     const itemsToReturn = Object.values(selectedItems.value)
         .filter(item => item.quantity > 0)
         .map(item => ({
@@ -82,31 +79,28 @@ const returnBill = async () => {
 
     if (itemsToReturn.length === 0) {
         error.value = 'Vui lòng chọn ít nhất một sản phẩm để trả lại.';
-        successMessage.value = '';
         return;
     }
 
     returnForm.bill_id = bill.value.id;
     returnForm.return_items = itemsToReturn;
     
-    try {
-        await axios.post(route('cashier.returns.process'), returnForm);
-        
-        error.value = '';
-        successMessage.value = 'Xử lý trả hàng thành công!';
-        
-        bill.value = null;
-        searchQuery.value = '';
-        selectedItems.value = {};
-        returnForm.reset();
-    } catch (err) {
-        if (err.response && err.response.data && err.response.data.error) {
-            error.value = err.response.data.error;
-        } else {
-            error.value = 'Đã xảy ra lỗi khi xử lý trả hàng.';
+    // Sử dụng form.post thay vì axios.post
+    // Inertia sẽ tự động chuyển hướng khi controller trả về redirect
+    returnForm.post(route('cashier.returns.process'), {
+        onSuccess: () => {
+            // Logic này sẽ chạy sau khi chuyển hướng thành công
+            // Ví dụ: có thể hiển thị một thông báo flash message nếu bạn đã thiết lập ở backend
+        },
+        onError: (errors) => {
+            // Xử lý các lỗi validation từ controller
+            if (errors && errors.error) {
+                error.value = errors.error;
+            } else {
+                error.value = 'Đã xảy ra lỗi khi xử lý trả hàng.';
+            }
         }
-        successMessage.value = '';
-    }
+    });
 };
 
 const totalAmountReturned = computed(() => {
@@ -150,7 +144,6 @@ const groupedBillDetails = computed(() => {
                 product: detail.product,
                 quantity: 0,
                 unit_price: detail.unit_price,
-                // Không cần batches ở đây nếu không dùng để sắp xếp
             };
         }
         groups[detail.product_id].quantity += detail.quantity;
@@ -175,7 +168,7 @@ const groupedBillDetails = computed(() => {
                 <div class="flex items-center gap-4 mb-4">
                     <div class="relative flex-1">
                         <Search class="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
-                        <input v-model="searchQuery" type="text" placeholder="Nhập mã bill hoặc SĐT khách hàng..."
+                        <input v-model="searchQuery" type="text" placeholder="Nhập mã hóa đơn"
                             class="w-full p-3 pl-12 pr-4 bg-gray-50 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200" />
                     </div>
                     <div v-if="loading" class="text-blue-500">Đang tìm...</div>
